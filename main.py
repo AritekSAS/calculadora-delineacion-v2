@@ -1,0 +1,1 @@
+def calcular_impuesto(area,tarifa)
