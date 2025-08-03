@@ -15,7 +15,10 @@ export default defineConfig({
       allow: [resolve(__dirname, 'src')]
     },
     proxy: {
-      '/api': 'http://localhost:5000'
+      '/api': {
+        target: 'http://localhost:5000',
+        changeOrigin: true
+      }
     }
   },
   build: {
@@ -29,3 +32,5 @@ export default defineConfig({
     }
   }
 });
+
+//

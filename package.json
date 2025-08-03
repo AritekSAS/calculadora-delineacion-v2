@@ -12,7 +12,11 @@
     "file-saver": "^2.0.5",
     "html2canvas": "^1.4.1",
     "react": "^17.0.2",
-    "react-dom": "^17.0.2"
+    "react-dom": "^17.0.2",
+    "docxtpl": "^0.16.0",
+    "docx2pdf": "^1.0.0",
+    "sqlite3": "^5.1.6",
+    "uuid": "^9.0.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.0.0",

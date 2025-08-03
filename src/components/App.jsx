@@ -7,6 +7,7 @@ import { UVT_YEARS, UVT_DEFAULT, ZONAS, ESTRATOS, TIPOS_DE_USO_C } from '../util
 import { formatCurrency, formatCurrencyWithDecimals, numeroALetras } from '../utils/format.js';
 import { getCoeficienteK, getCoeficienteE, getCoeficienteC, getCategoriaNombre } from '../utils/calculations.js';
 import { useShareImage } from '../hooks/useShareImage.js';
+import RecibosList from './RecibosList.jsx';
 
 function App() {
   const [tipoCalculo, setTipoCalculo] = useState('vivienda');
@@ -24,6 +25,7 @@ function App() {
   const [resultado, setResultado] = useState(null);
   const [errors, setErrors] = useState({});
   const resultCardRef = useRef(null);
+  const [pdfUrl, setPdfUrl] = useState(null);
 
   const [docData, setDocData] = useState({
     recibo: '',
@@ -49,59 +51,7 @@ function App() {
     script.id = scriptId;
     script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
     script.async = true;
-    document.head.appendChild(script);
-    return () => { const es = document.getElementById(scriptId); if (es) document.head.removeChild(es); };
-  }, []);
-
-  const zonasDisponibles = useMemo(() => (tipoCalculo === 'vivienda' ? ZONAS.VIVIENDA : ZONAS.OTRO_USO), [tipoCalculo]);
-  const subzonasDisponibles = useMemo(() => {
-    if (!zona) return [];
-    const z = zonasDisponibles.find(z => z.id === zona);
-    return z ? z.subzonas : [];
-  }, [zona, zonasDisponibles]);
-  const estratosDisponibles = useMemo(() => (
-    tipoCalculo === 'vivienda' && isAsentamiento ? ESTRATOS.filter(e => e.value <= 4) : ESTRATOS
-  ), [isAsentamiento, tipoCalculo]);
-
-  const totalM2ParaC = useMemo(() => (
-    (parseFloat(m2Existentes) || 0) + (parseFloat(m2Liquidar) || 0) + (parseFloat(m2Comunes) || 0)
-  ), [m2Existentes, m2Liquidar, m2Comunes]);
-  const categoriaCalculada = useMemo(() => getCategoriaNombre(tipoDeUso, totalM2ParaC), [tipoDeUso, totalM2ParaC]);
-@@ -124,50 +143,91 @@ function App() {
-      else if (ruralZones.includes(zona)) { descPercent = 0.15; }
-      else if (zona === 'PROTECCION') { descPercent = 0.10; }
-      if(descPercent > 0){
-        descuento = baseResult * descPercent; finalResult = baseResult - descuento;
-        breakdownAmbiental = `Desc. Ambiental (${descPercent*100}%): - ${formatCurrencyWithDecimals(descuento)}`;
-      }
-    }
-
-    const roundedFinalResult = Math.round(finalResult);
-    valorEnLetras = numeroALetras(roundedFinalResult, { plural: 'PESOS', singular: 'PESO' }) + ' M/CTE';
-    anioTarifas = (UVT_YEARS.find(y => y.value === uvtNum) || {}).year;
-    fechaEstimacion = new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
-
-    setResultado({ value: roundedFinalResult, formula, breakdownLiq, breakdownCom, breakdownAmbiental, valorEnLetras, datosProyecto, fechaEstimacion, anioTarifas });
-  };
-
-  const handleShare = useShareImage(resultCardRef);
-
-  const handleReset = () => {
-    setTipoCalculo('vivienda'); setIsAsentamiento(false); setMedidasAmbientales(false); setIsAutogestion(false);
-    setM2Existentes(''); setM2Liquidar(''); setM2Comunes('');
-    setUvt(UVT_DEFAULT); setZona(''); setSubzona(''); setEstrato(''); setTipoDeUso('');
-    setResultado(null); setErrors({});
-  };
-
-  const handleDocChange = (field, value) => {
-    setDocData(prev => ({ ...prev, [field]: value }));
-  };
-
-  const handleUsoChange = (index, field, value) => {
-    setDocData(prev => {
-      const usos = [...prev.usos];
-      usos[index][field] = value;
-      return { ...prev, usos };
+@@ -105,52 +107,54 @@ function App() {
     });
   };
 
@@ -127,8 +77,10 @@ function App() {
       payload[`TT${i}`] = u.TT;
     });
     try {
-      const response = await axios.post('/api/generar-documento', payload, { responseType: 'blob' });
-      saveAs(new Blob([response.data], { type: 'application/pdf' }), 'informe.pdf');
+      const response = await axios.post('/api/generar-recibo', payload, { responseType: 'blob' });
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      setPdfUrl(URL.createObjectURL(blob));
+      saveAs(blob, 'recibo.pdf');
     } catch (err) {
       console.error(err);
     }
@@ -154,47 +106,7 @@ function App() {
               <SelectField label="Año y Valor UVT" value={uvt} onChange={handleUvtChange} options={UVT_YEARS.map(u => ({ value: u.value, label: `Año ${u.year} - ${formatCurrency(u.value)}` }))} error={errors.uvt} />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <InputField label="M² Existentes" type="number" value={m2Existentes} onChange={(e) => setM2Existentes(e.target.value)} placeholder="0" min="0" />
-              <InputField label="M² a Liquidar" type="number" value={m2Liquidar} onChange={(e) => setM2Liquidar(e.target.value)} placeholder="Ej: 120" min="0" />
-              <InputField label="M² Zonas Comunes" type="number" value={m2Comunes} onChange={(e) => setM2Comunes(e.target.value)} placeholder="Ej: 30" min="0" />
-            </div>
-            <div className="flex items-center space-x-3 mt-6 pt-4 border-t border-gray-700">
-@@ -217,31 +277,70 @@ function App() {
-                {resultado.breakdownLiq && <p className="break-words">{resultado.breakdownLiq}</p>}
-                {resultado.breakdownCom && <p className="break-words">{resultado.breakdownCom}</p>}
-                {resultado.breakdownAmbiental && <p className="break-words font-semibold text-green-400 mt-2">{resultado.breakdownAmbiental}</p>}
-              </div>
-            </div>
-            <div className='text-center'>
-              <button id="share-button-clone" onClick={handleShare} className="mt-6 bg-gradient-to-r from-green-500 to-green-600 text-white font-bold py-2 px-6 rounded-lg shadow-md hover:from-green-600 hover:to-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-green-500 transition-all duration-300 text-sm">
-                Compartir Liquidación
-              </button>
-            </div>
-            <div className="mt-6 text-xs text-yellow-300 bg-yellow-900/30 p-4 rounded-lg">
-              <strong className="block text-center text-yellow-200">Nota Importante</strong>
-              <p className="mt-1 text-center">Este cálculo se basa en las tarifas del Acuerdo 164 de 2019, vigentes para el año {resultado.anioTarifas}. Estos valores cambiarán con el nuevo año. El valor es una estimación y no corresponde a una liquidación oficial, la cual debe ser validada por la Dirección de Urbanismo de Chía.</p>
-            </div>
-            <footer className="mt-6 pt-3 border-t border-gray-700">
-              <p className="text-left text-xs text-gray-500">
-                Herramienta generada e implementada por Aritek_arquitectura SAS.
-              </p>
-              <p className="text-left text-xs text-gray-500 flex items-center">
-                <svg className="w-3 h-3 mr-1.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z"></path><path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z"></path></svg>
-                ariteksas@gmail.com
-              </p>
-            </footer>
-          </div>
-        )}
-
-        <div className="mt-8 p-4 sm:p-6 bg-gray-800/50 border border-gray-700 rounded-xl">
-          <h2 className="text-lg sm:text-xl font-semibold text-white mb-4 border-b border-gray-700 pb-3">3. Generar Documento</h2>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <InputField label="Recibo" value={docData.recibo} onChange={(e) => handleDocChange('recibo', e.target.value)} />
-              <InputField label="Radicado" value={docData.radicado} onChange={(e) => handleDocChange('radicado', e.target.value)} />
-              <InputField label="CC Titular" value={docData.CC_TITULAR} onChange={(e) => handleDocChange('CC_TITULAR', e.target.value)} />
-              <InputField label="Cédula Catastral" value={docData.CEDULA_CATASTRAL} onChange={(e) => handleDocChange('CEDULA_CATASTRAL', e.target.value)} />
-              <InputField label="Total en Letras" value={docData.TOTAL_LETRAS} onChange={(e) => handleDocChange('TOTAL_LETRAS', e.target.value)} />
+@@ -198,35 +202,47 @@ function App() {
               <InputField label="Total Numérico" value={docData.total_num} onChange={(e) => handleDocChange('total_num', e.target.value)} />
               <InputField label="Norma" value={docData.NORMA} onChange={(e) => handleDocChange('NORMA', e.target.value)} />
               <InputField label="Zona" value={docData.ZONA} onChange={(e) => handleDocChange('ZONA', e.target.value)} />
@@ -220,12 +132,24 @@ function App() {
               <button type="button" onClick={addUso} className="mt-2 bg-gray-700 text-white px-4 py-2 rounded">Agregar Uso</button>
             </div>
             <div className="text-center">
-              <button type="submit" className="w-full sm:w-auto bg-blue-500 text-white font-bold py-2 px-8 rounded-lg shadow-md hover:bg-blue-600">Generar PDF</button>
+              <button type="submit" className="w-full sm:w-auto bg-blue-500 text-white font-bold py-2 px-8 rounded-lg shadow-md hover:bg-blue-600">Generar Recibo</button>
             </div>
           </form>
         </div>
+        <div className="p-4 sm:p-6 bg-gray-800/50 border border-gray-700 rounded-xl">
+          <RecibosList />
+        </div>
       </div>
     </div>
+    {pdfUrl && (
+      <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+        <div className="bg-white w-11/12 h-5/6 rounded-lg overflow-hidden relative">
+          <iframe src={pdfUrl} className="w-full h-full"></iframe>
+          <button onClick={() => setPdfUrl(null)} className="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded">Cerrar</button>
+        </div>
+      </div>
+    )}
+  </div>
   );
 }
 
