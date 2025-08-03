@@ -1,6 +1,8 @@
- const { useState, useMemo, useRef, useEffect } = React;
+const { useState, useMemo, useRef, useEffect } = React;
 import InputField from './InputField.jsx';
 import SelectField from './SelectField.jsx';
+import axios from 'axios';
+import { saveAs } from 'file-saver';
 import { UVT_YEARS, UVT_DEFAULT, ZONAS, ESTRATOS, TIPOS_DE_USO_C } from '../utils/data.js';
 import { formatCurrency, formatCurrencyWithDecimals, numeroALetras } from '../utils/format.js';
 import { getCoeficienteK, getCoeficienteE, getCoeficienteC, getCategoriaNombre } from '../utils/calculations.js';
@@ -22,6 +24,23 @@ function App() {
   const [resultado, setResultado] = useState(null);
   const [errors, setErrors] = useState({});
   const resultCardRef = useRef(null);
+
+  const [docData, setDocData] = useState({
+    recibo: '',
+    radicado: '',
+    CC_TITULAR: '',
+    CEDULA_CATASTRAL: '',
+    TOTAL_LETRAS: '',
+    total_num: '',
+    NORMA: '',
+    ZONA: '',
+    ESTRATO: '',
+    FECHA: '',
+    ARQUITECTO: '',
+    DIRECCION: '',
+    TELEFONO: '',
+    usos: [{ USO: '', UVT: '', AREA: '', COE: '', F: '', TD: '', TT: '' }]
+  });
 
   useEffect(() => {
     const scriptId = 'html2canvas-script';
@@ -48,79 +67,7 @@ function App() {
     (parseFloat(m2Existentes) || 0) + (parseFloat(m2Liquidar) || 0) + (parseFloat(m2Comunes) || 0)
   ), [m2Existentes, m2Liquidar, m2Comunes]);
   const categoriaCalculada = useMemo(() => getCategoriaNombre(tipoDeUso, totalM2ParaC), [tipoDeUso, totalM2ParaC]);
-
-  const handleZonaChange = (e) => { setZona(e.target.value); setSubzona(''); setResultado(null); };
-  const handleUvtChange = (e) => { setUvt(e.target.value); setResultado(null); };
-
-  const validateForm = () => {
-    const newErrors = {};
-    if ((parseFloat(m2Liquidar) || 0) <= 0 && (parseFloat(m2Comunes) || 0) <= 0) {
-      newErrors.m2 = 'Debe ingresar un valor positivo en "M² a Liquidar" o "M² Zonas Comunes".';
-    }
-    if (!uvt || uvt <= 0) newErrors.uvt = 'Debe seleccionar un valor de UVT.';
-    if (!zona) newErrors.zona = 'Debe seleccionar una zona.';
-    if (subzonasDisponibles.length > 0 && !subzona) { newErrors.subzona = 'Debe seleccionar una subzona.'; }
-    if (tipoCalculo === 'vivienda' && !estrato) { newErrors.estrato = 'Debe seleccionar un estrato.'; }
-    if (tipoCalculo === 'otro_uso' && !tipoDeUso) { newErrors.tipoDeUso = 'Debe seleccionar un tipo de uso.'; }
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleCalculate = () => {
-    if (!validateForm()) { setResultado(null); return; }
-
-    const m2ExistentesNum = parseFloat(m2Existentes) || 0;
-    const m2LiquidarNum = parseFloat(m2Liquidar) || 0;
-    const m2ComunesNum = parseFloat(m2Comunes) || 0;
-    const uvtNum = parseFloat(uvt);
-
-    let totalM2ParaK;
-    if(tipoCalculo === 'vivienda' && isAutogestion){
-      totalM2ParaK = m2LiquidarNum;
-    } else {
-      totalM2ParaK = m2ExistentesNum + m2LiquidarNum + m2ComunesNum;
-    }
-
-    const K = getCoeficienteK(zona, totalM2ParaK);
-
-    let baseResult, finalResult, formula = '', breakdownLiq = '', breakdownCom = '', valorEnLetras = '', datosProyecto = '', breakdownAmbiental = '', fechaEstimacion = '', anioTarifas = '';
-
-    let displaySubzona;
-    if (subzonasDisponibles.length > 0 && subzona) {
-      const selectedSubzonaObj = subzonasDisponibles.find(s => (typeof s === 'string' ? s === subzona : s.id === subzona));
-      displaySubzona = typeof selectedSubzonaObj === 'string' ? selectedSubzonaObj : (selectedSubzonaObj || {}).sigla;
-    } else {
-      displaySubzona = (ZONAS.VIVIENDA.find(z => z.id === zona) || ZONAS.OTRO_USO.find(z => z.id === zona) || {}).name || zona;
-    }
-
-    if (tipoCalculo === 'vivienda') {
-      const E = getCoeficienteE(estrato, isAsentamiento);
-      const impLiquidar = m2LiquidarNum * uvtNum * K * E;
-      const impComunes = m2ComunesNum * uvtNum * K * E * 0.5;
-      baseResult = impLiquidar + impComunes;
-
-      formula = `IDV = (Liq. M² x UVT x K x E) + (Comunes M² x UVT x K x E x 50%)`;
-      if (m2LiquidarNum > 0) breakdownLiq = `Liq. M²: (${m2LiquidarNum} x ${uvtNum} x ${K} x ${E}) = ${formatCurrencyWithDecimals(impLiquidar)}`;
-      if (m2ComunesNum > 0) breakdownCom = `Z. Comunes: (${m2ComunesNum} x ${uvtNum} x ${K} x ${E} x 50%) = ${formatCurrencyWithDecimals(impComunes)}`;
-      datosProyecto = `Uso: Vivienda ${isAutogestion ? '(Autogestión)' : ''} | Subzona: ${displaySubzona} | Estrato: ${estrato}`;
-    } else {
-      const C = getCoeficienteC(tipoDeUso, totalM2ParaK);
-      const impLiquidar = m2LiquidarNum * uvtNum * K * C;
-      const impComunes = m2ComunesNum * uvtNum * K * C * 0.5;
-      baseResult = impLiquidar + impComunes;
-
-      formula = `IDU = (Liq. M² x UVT x K x C) + (Comunes M² x UVT x K x C x 50%)`;
-      if (m2LiquidarNum > 0) breakdownLiq = `Liq. M²: (${m2LiquidarNum} x ${uvtNum} x ${K} x ${C}) = ${formatCurrencyWithDecimals(impLiquidar)}`;
-      if (m2ComunesNum > 0) breakdownCom = `Z. Comunes: (${m2ComunesNum} x ${uvtNum} x ${K} x ${C} x 50%) = ${formatCurrencyWithDecimals(impComunes)}`;
-      const categoriaNombre = getCategoriaNombre(tipoDeUso, totalM2ParaC);
-      datosProyecto = `Uso: ${(TIPOS_DE_USO_C.find(t => t.value === tipoDeUso) || {}).label} (${categoriaNombre}) | Subzona: ${displaySubzona}`;
-    }
-
-    finalResult = baseResult;
-    if(medidasAmbientales){
-      let descuento = 0; let descPercent = 0;
-      const urbanZones = ['AVIS', 'ARU', 'AH', 'AUM', 'AIM']; const ruralZones = ['ZR', 'ZSR'];
-      if(urbanZones.includes(zona)) { descPercent = 0.20; }
+@@ -124,50 +143,91 @@ function App() {
       else if (ruralZones.includes(zona)) { descPercent = 0.15; }
       else if (zona === 'PROTECCION') { descPercent = 0.10; }
       if(descPercent > 0){
@@ -144,6 +91,47 @@ function App() {
     setM2Existentes(''); setM2Liquidar(''); setM2Comunes('');
     setUvt(UVT_DEFAULT); setZona(''); setSubzona(''); setEstrato(''); setTipoDeUso('');
     setResultado(null); setErrors({});
+  };
+
+  const handleDocChange = (field, value) => {
+    setDocData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleUsoChange = (index, field, value) => {
+    setDocData(prev => {
+      const usos = [...prev.usos];
+      usos[index][field] = value;
+      return { ...prev, usos };
+    });
+  };
+
+  const addUso = () => {
+    setDocData(prev => ({
+      ...prev,
+      usos: [...prev.usos, { USO: '', UVT: '', AREA: '', COE: '', F: '', TD: '', TT: '' }]
+    }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const payload = { ...docData };
+    delete payload.usos;
+    docData.usos.forEach((u, idx) => {
+      const i = idx + 1;
+      payload[`USO${i}`] = u.USO;
+      payload[`UVT${i}`] = u.UVT;
+      payload[`AREA${i}`] = u.AREA;
+      payload[`COE${i}`] = u.COE;
+      payload[`F${i}`] = u.F;
+      payload[`TD${i}`] = u.TD;
+      payload[`TT${i}`] = u.TT;
+    });
+    try {
+      const response = await axios.post('/api/generar-documento', payload, { responseType: 'blob' });
+      saveAs(new Blob([response.data], { type: 'application/pdf' }), 'informe.pdf');
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   return (
@@ -171,49 +159,7 @@ function App() {
               <InputField label="M² Zonas Comunes" type="number" value={m2Comunes} onChange={(e) => setM2Comunes(e.target.value)} placeholder="Ej: 30" min="0" />
             </div>
             <div className="flex items-center space-x-3 mt-6 pt-4 border-t border-gray-700">
-              <input type="checkbox" id="ambiental" checked={medidasAmbientales} onChange={(e) => { setMedidasAmbientales(e.target.checked); setResultado(null); }} className="h-4 w-4 text-[#63ff9a] bg-gray-700 border-gray-600 rounded focus:ring-[#63ff9a] focus:ring-offset-gray-800" />
-              <label htmlFor="ambiental" className="text-sm font-medium text-gray-300">¿Proyecto con medidas ambientales?</label>
-            </div>
-            {errors.m2 && <p className="mt-2 text-xs text-red-400">{errors.m2}</p>}
-          </div>
-          <div className="p-4 sm:p-6 bg-gray-800/50 border border-gray-700 rounded-xl">
-            <h2 className="text-lg sm:text-xl font-semibold text-white mb-4 border-b border-gray-700 pb-3">2. Zona y Coeficientes</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <SelectField label="Zona" value={zona} onChange={handleZonaChange} options={zonasDisponibles} error={errors.zona} />
-              {subzonasDisponibles.length > 0 && (
-                <SelectField label="Subzona (Informativa)" value={subzona} onChange={(e) => setSubzona(e.target.value)} options={subzonasDisponibles.map(sz => typeof sz === 'string' ? {value: sz, label: sz} : {value: sz.id, label: `${sz.name.substring(0,25)}... (${sz.sigla})`})} disabled={!zona} error={errors.subzona} />
-              )}
-              {tipoCalculo === 'vivienda' ? (
-                <SelectField label="Estrato Socioeconómico (E)" value={estrato} onChange={(e) => setEstrato(e.target.value)} options={estratosDisponibles} error={errors.estrato} />
-              ) : (
-                <SelectField label="Tipo de Uso (C)" value={tipoDeUso} onChange={(e) => setTipoDeUso(e.target.value)} options={TIPOS_DE_USO_C} error={errors.tipoDeUso} />
-              )}
-              {tipoCalculo === 'otro_uso' && categoriaCalculada && (
-                <div className="md:col-span-2 mt-2 p-3 bg-gray-700/50 rounded-lg text-center">
-                  <p className="text-sm text-gray-300">Categoría Aplicada (Automática): <span className="font-bold text-white">{categoriaCalculada}</span></p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
-          <button onClick={handleCalculate} className="w-full sm:w-auto bg-gradient-to-r from-[#63ff9a] to-green-400 text-gray-900 font-bold py-3 px-8 rounded-lg shadow-lg hover:shadow-green-400/30 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-green-400 transition-all duration-300 transform hover:scale-105">Calcular Impuesto</button>
-          <button onClick={handleReset} className="w-full sm:w-auto bg-gray-700 text-white font-bold py-3 px-8 rounded-lg shadow-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-gray-600 transition-all duration-300 transform hover:scale-105">Limpiar</button>
-        </div>
-        {resultado && (
-          <div ref={resultCardRef} className="mt-8 p-4 sm:p-6 bg-gray-800 border-2 border-dashed border-gray-700 rounded-xl">
-            <div className="border-b text-center border-gray-700 pb-3 mb-4">
-              <p className="text-sm font-medium text-gray-300">Datos del Proyecto</p>
-              <p className="text-xs text-gray-400">{resultado.datosProyecto}</p>
-            </div>
-            <div className='text-center'>
-              <p className="text-base font-medium text-gray-300">Impuesto de Delineación Estimado ({resultado.fechaEstimacion})</p>
-              <p className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-white my-2">{formatCurrency(resultado.value)}</p>
-              <p className="text-xs text-gray-400 capitalize mb-4">({resultado.valorEnLetras})</p>
-            </div>
-            <div className="text-xs text-left text-gray-300 bg-gray-900/50 p-4 rounded-lg">
-              <p className="font-bold text-center text-base mb-2">Desglose del Cálculo</p>
-              <div className="text-center space-y-1">
+@@ -217,31 +277,70 @@ function App() {
                 {resultado.breakdownLiq && <p className="break-words">{resultado.breakdownLiq}</p>}
                 {resultado.breakdownCom && <p className="break-words">{resultado.breakdownCom}</p>}
                 {resultado.breakdownAmbiental && <p className="break-words font-semibold text-green-400 mt-2">{resultado.breakdownAmbiental}</p>}
@@ -239,6 +185,45 @@ function App() {
             </footer>
           </div>
         )}
+
+        <div className="mt-8 p-4 sm:p-6 bg-gray-800/50 border border-gray-700 rounded-xl">
+          <h2 className="text-lg sm:text-xl font-semibold text-white mb-4 border-b border-gray-700 pb-3">3. Generar Documento</h2>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <InputField label="Recibo" value={docData.recibo} onChange={(e) => handleDocChange('recibo', e.target.value)} />
+              <InputField label="Radicado" value={docData.radicado} onChange={(e) => handleDocChange('radicado', e.target.value)} />
+              <InputField label="CC Titular" value={docData.CC_TITULAR} onChange={(e) => handleDocChange('CC_TITULAR', e.target.value)} />
+              <InputField label="Cédula Catastral" value={docData.CEDULA_CATASTRAL} onChange={(e) => handleDocChange('CEDULA_CATASTRAL', e.target.value)} />
+              <InputField label="Total en Letras" value={docData.TOTAL_LETRAS} onChange={(e) => handleDocChange('TOTAL_LETRAS', e.target.value)} />
+              <InputField label="Total Numérico" value={docData.total_num} onChange={(e) => handleDocChange('total_num', e.target.value)} />
+              <InputField label="Norma" value={docData.NORMA} onChange={(e) => handleDocChange('NORMA', e.target.value)} />
+              <InputField label="Zona" value={docData.ZONA} onChange={(e) => handleDocChange('ZONA', e.target.value)} />
+              <InputField label="Estrato" value={docData.ESTRATO} onChange={(e) => handleDocChange('ESTRATO', e.target.value)} />
+              <InputField label="Fecha" value={docData.FECHA} onChange={(e) => handleDocChange('FECHA', e.target.value)} />
+              <InputField label="Arquitecto" value={docData.ARQUITECTO} onChange={(e) => handleDocChange('ARQUITECTO', e.target.value)} />
+              <InputField label="Dirección" value={docData.DIRECCION} onChange={(e) => handleDocChange('DIRECCION', e.target.value)} />
+              <InputField label="Teléfono" value={docData.TELEFONO} onChange={(e) => handleDocChange('TELEFONO', e.target.value)} />
+            </div>
+            <div>
+              <h3 className="text-sm font-medium text-gray-400 mb-2">Desglose por Usos</h3>
+              {docData.usos.map((u, idx) => (
+                <div key={idx} className="grid grid-cols-1 md:grid-cols-7 gap-2 mb-4">
+                  <InputField label={`USO${idx + 1}`} value={u.USO} onChange={(e) => handleUsoChange(idx, 'USO', e.target.value)} />
+                  <InputField label={`UVT${idx + 1}`} value={u.UVT} onChange={(e) => handleUsoChange(idx, 'UVT', e.target.value)} />
+                  <InputField label={`AREA${idx + 1}`} value={u.AREA} onChange={(e) => handleUsoChange(idx, 'AREA', e.target.value)} />
+                  <InputField label={`COE${idx + 1}`} value={u.COE} onChange={(e) => handleUsoChange(idx, 'COE', e.target.value)} />
+                  <InputField label={`F${idx + 1}`} value={u.F} onChange={(e) => handleUsoChange(idx, 'F', e.target.value)} />
+                  <InputField label={`TD${idx + 1}`} value={u.TD} onChange={(e) => handleUsoChange(idx, 'TD', e.target.value)} />
+                  <InputField label={`TT${idx + 1}`} value={u.TT} onChange={(e) => handleUsoChange(idx, 'TT', e.target.value)} />
+                </div>
+              ))}
+              <button type="button" onClick={addUso} className="mt-2 bg-gray-700 text-white px-4 py-2 rounded">Agregar Uso</button>
+            </div>
+            <div className="text-center">
+              <button type="submit" className="w-full sm:w-auto bg-blue-500 text-white font-bold py-2 px-8 rounded-lg shadow-md hover:bg-blue-600">Generar PDF</button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   );

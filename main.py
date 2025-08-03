@@ -1,32 +1,48 @@
-"""Módulo para cálculo del impuesto de delineación."""
+"""Flask backend for document generation and utility helpers."""
+
+from flask import Flask, request, send_file
+from docxtpl import DocxTemplate
+from docx2pdf import convert
+from uuid import uuid4
+import os
+
+
+app = Flask(__name__)
 
 
 def calcular_impuesto(area, tarifa):
-    """Calcula el impuesto multiplicando ``area`` por ``tarifa``.
-
-    El resultado se redondea al peso más cercano y se devuelve como un
-    entero.
-
-    Args:
-        area (float): Área sobre la cual se aplica el impuesto.
-        tarifa (float): Tarifa en pesos por unidad de área.
-
-    Returns:
-        int: Valor del impuesto redondeado al peso más cercano.
-    """
+    """Calcula el impuesto multiplicando ``area`` por ``tarifa`` y redondea al peso."""
     impuesto = area * tarifa
     return int(round(impuesto))
 
 
-if __name__ == "__main__":
-    # Ejemplos de uso y pruebas básicas
-    casos = [
-        (100, 25.5, 2550),   # 100 * 25.5 = 2550.0
-        (10.5, 200.2, 2102), # 10.5 * 200.2 = 2102.1 -> 2102
-        (33.3, 20.1, 669),   # 33.3 * 20.1 = 669.33 -> 669
-    ]
-    for area, tarifa, esperado in casos:
-        resultado = calcular_impuesto(area, tarifa)
-        print(f"calcular_impuesto({area}, {tarifa}) = {resultado}")
-        assert resultado == esperado, f"Esperado {esperado}, obtenido {resultado}"
-    print("Pruebas básicas completadas.")
+@app.route('/api/generar-documento', methods=['POST'])
+def generar_documento():
+    """Rellena la plantilla de Word y la convierte a PDF para su descarga."""
+    data = request.json or {}
+    tpl = DocxTemplate('templates/plantilla.docx')
+
+    # Los datos recibidos incluyen todos los marcadores usados en la plantilla
+    tpl.render({key: data.get(key, '') for key in data.keys()})
+
+    temp_docx = f"/tmp/{uuid4()}.docx"
+    tpl.save(temp_docx)
+
+    temp_pdf = f"/tmp/{uuid4()}.pdf"
+    convert(temp_docx, temp_pdf)
+
+    response = send_file(temp_pdf, as_attachment=True, download_name='informe.pdf')
+
+    @response.call_on_close
+    def cleanup() -> None:
+        for f in (temp_docx, temp_pdf):
+            try:
+                os.remove(f)
+            except OSError:
+                pass
+
+    return response
+
+
+if __name__ == '__main__':
+    app.run(debug=True)
