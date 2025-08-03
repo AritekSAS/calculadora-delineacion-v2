@@ -10,6 +10,7 @@ function App() {
   const [uvt, setUvt] = useState(UVT_DEFAULT);
   const [errors, setErrors] = useState({});
   const [pdfUrl, setPdfUrl] = useState(null);
+  const [reciboId, setReciboId] = useState(null);
   const resultCardRef = useRef(null);
   const [activeTab, setActiveTab] = useState('general');
 
@@ -17,7 +18,7 @@ function App() {
     recibo: '',
     radicado: '',
     TITULARES: '',
-    CC_TITULARES: '',
+    CEDULA_CATASTRAL: '',
     TOTAL_LETRAS: '',
     total_num: '',
     NORMA: '',
@@ -43,7 +44,7 @@ function App() {
   const handleUvtChange = (e) => {
     setUvt(e.target.value);
   };
-
+@@ -47,191 +48,218 @@ function App() {
   const handleDocChange = (field, value) => {
     setDocData(prev => ({ ...prev, [field]: value }));
   };
@@ -69,7 +70,7 @@ function App() {
     if (!docData.recibo || isNaN(docData.recibo)) newErrors.recibo = 'Requerido y numérico';
     if (!docData.radicado || isNaN(docData.radicado)) newErrors.radicado = 'Requerido y numérico';
     if (!docData.TITULARES) newErrors.TITULARES = 'Requerido';
-    if (!docData.CC_TITULARES) newErrors.CC_TITULARES = 'Requerido';
+    if (!docData.CEDULA_CATASTRAL) newErrors.CEDULA_CATASTRAL = 'Requerido';
     if (!docData.TOTAL_LETRAS) newErrors.TOTAL_LETRAS = 'Requerido';
     if (!docData.total_num || isNaN(docData.total_num)) newErrors.total_num = 'Requerido y numérico';
 
@@ -95,7 +96,21 @@ function App() {
       const response = await axios.post('/api/generar-recibo', payload, { responseType: 'blob' });
       const blob = new Blob([response.data], { type: 'application/pdf' });
       setPdfUrl(URL.createObjectURL(blob));
+      setReciboId(response.headers['x-recibo-id']);
       saveAs(blob, 'recibo.pdf');
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const downloadDocx = async () => {
+    if (!reciboId) return;
+    try {
+      const res = await axios.get(`/api/recibos/${reciboId}/docx`, { responseType: 'blob' });
+      const blob = new Blob([res.data], {
+        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      });
+      saveAs(blob, 'recibo.docx');
     } catch (err) {
       console.error(err);
     }
@@ -121,7 +136,14 @@ function App() {
                   className={`ml-4 px-4 py-2 text-sm font-medium ${activeTab === 'predio' ? 'text-white border-b-2 border-white' : 'text-gray-400'}`}
                   onClick={() => setActiveTab('predio')}
                 >
-                  Datos del Predio y Titular
+                  Datos del Predio
+                </button>
+                <button
+                  type="button"
+                  className={`ml-4 px-4 py-2 text-sm font-medium ${activeTab === 'recibo' ? 'text-white border-b-2 border-white' : 'text-gray-400'}`}
+                  onClick={() => setActiveTab('recibo')}
+                >
+                  Datos del Recibo
                 </button>
               </div>
 
@@ -174,6 +196,24 @@ function App() {
               {activeTab === 'predio' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <InputField
+                    label="Total en Letras"
+                    value={docData.TOTAL_LETRAS}
+                    onChange={(e) => handleDocChange('TOTAL_LETRAS', e.target.value)}
+                    error={errors.TOTAL_LETRAS}
+                  />
+                  <InputField
+                    label="Total Numérico"
+                    type="number"
+                    value={docData.total_num}
+                    onChange={(e) => handleDocChange('total_num', e.target.value)}
+                    error={errors.total_num}
+                  />
+                </div>
+              )}
+
+              {activeTab === 'recibo' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <InputField
                     label="Número de Liquidación"
                     type="number"
                     value={docData.recibo}
@@ -195,22 +235,9 @@ function App() {
                   />
                   <InputField
                     label="Cédula Catastral"
-                    value={docData.CC_TITULARES}
-                    onChange={(e) => handleDocChange('CC_TITULARES', e.target.value)}
-                    error={errors.CC_TITULARES}
-                  />
-                  <InputField
-                    label="Total en Letras"
-                    value={docData.TOTAL_LETRAS}
-                    onChange={(e) => handleDocChange('TOTAL_LETRAS', e.target.value)}
-                    error={errors.TOTAL_LETRAS}
-                  />
-                  <InputField
-                    label="Total Numérico"
-                    type="number"
-                    value={docData.total_num}
-                    onChange={(e) => handleDocChange('total_num', e.target.value)}
-                    error={errors.total_num}
+                    value={docData.CEDULA_CATASTRAL}
+                    onChange={(e) => handleDocChange('CEDULA_CATASTRAL', e.target.value)}
+                    error={errors.CEDULA_CATASTRAL}
                   />
                 </div>
               )}
@@ -226,6 +253,7 @@ function App() {
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
           <div className="bg-white w-11/12 h-5/6 rounded-lg overflow-hidden relative">
             <iframe src={pdfUrl} className="w-full h-full"></iframe>
+            <button onClick={downloadDocx} className="absolute bottom-4 right-4 bg-blue-500 text-white px-4 py-2 rounded">Generar Recibo</button>
             <button onClick={() => setPdfUrl(null)} className="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded">Cerrar</button>
           </div>
         </div>

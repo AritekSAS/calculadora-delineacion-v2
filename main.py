@@ -1,23 +1,3 @@
-"""Flask backend for document generation and utility helpers."""
-
-from flask import Flask, request, send_file, jsonify
-from docxtpl import DocxTemplate
-from docx2pdf import convert
-from uuid import uuid4
-import os
-import json
-import sqlite3
-
-
-app = Flask(__name__)
-
-DB_PATH = 'recibos.db'
-
-
-def _init_storage():
-    os.makedirs('recibos', exist_ok=True)
-
-
 @app.route('/api/generar-recibo', methods=['POST'])
 def generar_recibo():
     """Genera un recibo a partir de la plantilla, lo guarda y lo registra en la BD."""
@@ -41,7 +21,9 @@ def generar_recibo():
     con.commit()
     con.close()
 
-    return send_file(pdf_path, as_attachment=True, download_name='recibo.pdf')
+    resp = send_file(pdf_path, as_attachment=True, download_name='recibo.pdf')
+    resp.headers['X-Recibo-ID'] = uid
+    return resp
 
 
 @app.route('/api/recibos', methods=['GET'])
@@ -60,7 +42,7 @@ def listar_recibos():
             'id': rid,
             'fecha': fecha,
             'recibo': d.get('recibo', ''),
-            'titular': d.get('CC_TITULAR', ''),
+            'titular': d.get('TITULARES', ''),
         })
 
     return jsonify(recibos)
@@ -77,6 +59,24 @@ def obtener_pdf(rid):
     if not row:
         return jsonify({'error': 'Recibo no encontrado'}), 404
     return send_file(row[0], as_attachment=False, mimetype='application/pdf')
+
+
+@app.route('/api/recibos/<rid>/docx', methods=['GET'])
+def obtener_docx(rid):
+    """Devuelve el DOCX de un recibo específico."""
+    con = sqlite3.connect(DB_PATH)
+    cur = con.cursor()
+    cur.execute('SELECT docx_path FROM recibos WHERE id = ?', (rid,))
+    row = cur.fetchone()
+    con.close()
+    if not row:
+        return jsonify({'error': 'Recibo no encontrado'}), 404
+    return send_file(
+        row[0],
+        as_attachment=True,
+        download_name='recibo.docx',
+        mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    )
 
 
 if __name__ == '__main__':
