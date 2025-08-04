@@ -1,65 +1,3 @@
-import { useState } from 'react';
-import axios from 'axios';
-import { saveAs } from 'file-saver';
-import InputField from './InputField.jsx';
-import SelectField from './SelectField.jsx';
-import { UVT_YEARS } from '../utils/data.js';
-
-function App() {
-  const [tipoCalculo, setTipoCalculo] = useState('vivienda');
-  const [uvt, setUvt] = useState(UVT_YEARS[0].value);
-  const [activeTab, setActiveTab] = useState('general');
-  const [pdfUrl, setPdfUrl] = useState(null);
-  const [reciboId, setReciboId] = useState(null);
-  const [errors, setErrors] = useState({});
-  const [docData, setDocData] = useState({
-    NORMA: '',
-    ZONA: '',
-    ESTRATO: '',
-    FECHA: '',
-    ARQUITECTO: '',
-    DIRECCION: '',
-    TELEFONO: '',
-    usos: [{ USO: '', UVT: '', AREA: '', COE: '', F: '', TD: '', TT: '' }],
-    TOTAL_LETRAS: '',
-    total_num: '',
-    recibo: '',
-    radicado: '',
-    TITULARES: '',
-    CEDULA_CATASTRAL: ''
-  });
-
-  const handleDocChange = (field, value) => {
-    setDocData((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const handleUsoChange = (idx, field, value) => {
-    setDocData((prev) => {
-      const usos = prev.usos.map((u, i) => (i === idx ? { ...u, [field]: value } : u));
-      return { ...prev, usos };
-    });
-  };
-
-  const addUso = () => {
-    setDocData((prev) => ({
-      ...prev,
-      usos: [...prev.usos, { USO: '', UVT: '', AREA: '', COE: '', F: '', TD: '', TT: '' }]
-    }));
-  };
-
-  const handleUvtChange = (e) => {
-    setUvt(e.target.value);
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setErrors({});
-    try {
-      const res = await axios.post('/api/recibos', {
-        ...docData,
-        tipoCalculo,
-        uvt
-      });
       if (res.data) {
         setReciboId(res.data.id);
         if (res.data.pdfUrl) {
@@ -85,20 +23,20 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen text-gray-100 py-8 px-4">
+    <div className="min-h-screen bg-gray-900 text-gray-100 py-8 px-4">
       <div className="max-w-4xl mx-auto">
         <h1 className="text-3xl font-bold text-center mb-8 text-white">
           Calculadora Impuesto de Delineación - Chía
         </h1>
         <div className="space-y-6">
-          <div className="p-4 sm:p-6 bg-gray-800/50 border border-gray-700 rounded-xl">
+          <div className="p-6 bg-gray-800/50 border border-gray-700 rounded-xl">
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="flex border-b border-gray-700 mb-4">
                 <button
                   type="button"
                   className={`px-4 py-2 text-sm font-medium ${
                     activeTab === 'general'
-                      ? 'text-white border-b-2 border-white'
+                      ? 'text-white border-b-2 border-[#63ff9a]'
                       : 'text-gray-400'
                   }`}
                   onClick={() => setActiveTab('general')}
@@ -109,7 +47,7 @@ function App() {
                   type="button"
                   className={`ml-4 px-4 py-2 text-sm font-medium ${
                     activeTab === 'predioTitular'
-                      ? 'text-white border-b-2 border-white'
+                      ? 'text-white border-b-2 border-[#63ff9a]'
                       : 'text-gray-400'
                   }`}
                   onClick={() => setActiveTab('predioTitular')}
@@ -135,27 +73,7 @@ function App() {
                       value={uvt}
                       onChange={handleUvtChange}
                       options={UVT_YEARS.map((u) => ({
-                        value: u.value,
-                        label: `Año ${u.year} - ${u.value}`
-                      }))}
-                      error={errors.uvt}
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <InputField
-                      label="Norma"
-                      value={docData.NORMA}
-                      onChange={(e) => handleDocChange('NORMA', e.target.value)}
-                    />
-                    <InputField
-                      label="Zona"
-                      value={docData.ZONA}
-                      onChange={(e) => handleDocChange('ZONA', e.target.value)}
-                    />
-                    <InputField
-                      label="Estrato"
-                      value={docData.ESTRATO}
+@@ -159,94 +159,94 @@ function App() {
                       onChange={(e) => handleDocChange('ESTRATO', e.target.value)}
                     />
                     <InputField
@@ -181,7 +99,7 @@ function App() {
                   </div>
 
                   <div>
-                    <h3 className="text-sm font-medium text-gray-400 mb-2">Desglose por Usos</h3>
+                    <h3 className="text-sm font-medium text-gray-300 mb-2">Desglose por Usos</h3>
                     {docData.usos.map((u, idx) => (
                       <div key={idx} className="grid grid-cols-1 md:grid-cols-7 gap-2 mb-4">
                         <InputField
@@ -224,7 +142,7 @@ function App() {
                     <button
                       type="button"
                       onClick={addUso}
-                      className="mt-2 bg-gray-700 text-white px-4 py-2 rounded"
+                      className="mt-2 bg-gray-700 text-white px-4 py-2 rounded-lg hover:bg-gray-600"
                     >
                       Agregar Uso
                     </button>
@@ -250,14 +168,7 @@ function App() {
                     />
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <InputField
-                      label="Número de Liquidación"
-                      type="number"
-                      value={docData.recibo}
-                      onChange={(e) => handleDocChange('recibo', e.target.value)}
-                      error={errors.recibo}
-                    />
-                    <InputField
+@@ -261,58 +261,58 @@ function App() {
                       label="Número de Radicación"
                       type="number"
                       value={docData.radicado}
@@ -283,7 +194,7 @@ function App() {
               <div className="text-center">
                 <button
                   type="submit"
-                  className="w-full sm:w-auto bg-blue-500 text-white font-bold py-2 px-8 rounded-lg shadow-md hover:bg-blue-600"
+                  className="w-full sm:w-auto bg-blue-500 text-white font-bold py-2 px-8 rounded-lg hover:bg-blue-600"
                 >
                   Generar Recibo
                 </button>
@@ -298,7 +209,7 @@ function App() {
             <iframe src={pdfUrl} className="w-full h-full"></iframe>
             <button
               onClick={downloadDocx}
-              className="absolute bottom-4 right-4 bg-blue-500 text-white px-4 py-2 rounded"
+              className="absolute bottom-4 right-4 bg-blue-500 text-white font-bold py-2 px-8 rounded-lg hover:bg-blue-600"
             >
               Generar Recibo
             </button>
