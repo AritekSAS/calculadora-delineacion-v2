@@ -12,3 +12,5 @@ const InputField = ({ label, type, value, onChange, placeholder, min, error }) =
     {error && <p className="mt-1 text-xs text-red-400">{error}</p>}
   </div>
 );
+
+export default InputField;
