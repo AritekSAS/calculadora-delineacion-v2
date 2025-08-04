@@ -1,4 +1,4 @@
-const { useState, useEffect, useRef } = React;
+import React, { useState, useEffect, useRef } from 'react';
 import InputField from './InputField.jsx';
 import SelectField from './SelectField.jsx';
 import axios from 'axios';
@@ -28,7 +28,7 @@ function App() {
     ARQUITECTO: '',
     DIRECCION: '',
     TELEFONO: '',
-    usos: [{ USO: '', UVT: '', AREA: '', COE: '', F: '', TD: '', TT: '' }]
+    usos: [{ USO: '', UVT: '', AREA: '', COE: '', F: '', TD: '', TT: '' }],
   });
 
   useEffect(() => {
@@ -41,25 +41,23 @@ function App() {
     document.body.appendChild(script);
   }, []);
 
-  const handleUvtChange = (e) => {
-    setUvt(e.target.value);
-  };
-@@ -47,191 +48,218 @@ function App() {
+  const handleUvtChange = (e) => setUvt(e.target.value);
+
   const handleDocChange = (field, value) => {
-    setDocData(prev => ({ ...prev, [field]: value }));
+    setDocData((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleUsoChange = (idx, field, value) => {
-    setDocData(prev => {
-      const usos = prev.usos.map((u, i) => i === idx ? { ...u, [field]: value } : u);
+    setDocData((prev) => {
+      const usos = prev.usos.map((u, i) => (i === idx ? { ...u, [field]: value } : u));
       return { ...prev, usos };
     });
   };
 
   const addUso = () => {
-    setDocData(prev => ({
+    setDocData((prev) => ({
       ...prev,
-      usos: [...prev.usos, { USO: '', UVT: '', AREA: '', COE: '', F: '', TD: '', TT: '' }]
+      usos: [...prev.usos, { USO: '', UVT: '', AREA: '', COE: '', F: '', TD: '', TT: '' }],
     }));
   };
 
@@ -108,7 +106,7 @@ function App() {
     try {
       const res = await axios.get(`/api/recibos/${reciboId}/docx`, { responseType: 'blob' });
       const blob = new Blob([res.data], {
-        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       });
       saveAs(blob, 'recibo.docx');
     } catch (err) {
@@ -140,10 +138,10 @@ function App() {
                 </button>
                 <button
                   type="button"
-                  className={`ml-4 px-4 py-2 text-sm font-medium ${activeTab === 'recibo' ? 'text-white border-b-2 border-white' : 'text-gray-400'}`}
-                  onClick={() => setActiveTab('recibo')}
+                  className={`ml-4 px-4 py-2 text-sm font-medium ${activeTab === 'predioTitular' ? 'text-white border-b-2 border-white' : 'text-gray-400'}`}
+                  onClick={() => setActiveTab('predioTitular')}
                 >
-                  Datos del Recibo
+                  Datos del Predio y Titular
                 </button>
               </div>
 
@@ -160,7 +158,7 @@ function App() {
                       label="Año y Valor UVT"
                       value={uvt}
                       onChange={handleUvtChange}
-                      options={UVT_YEARS.map(u => ({ value: u.value, label: `Año ${u.year} - ${u.value}` }))}
+                      options={UVT_YEARS.map((u) => ({ value: u.value, label: `Año ${u.year} - ${u.value}` }))}
                       error={errors.uvt}
                     />
                   </div>
@@ -188,7 +186,9 @@ function App() {
                         <InputField label={`TT${idx + 1}`} value={u.TT} onChange={(e) => handleUsoChange(idx, 'TT', e.target.value)} />
                       </div>
                     ))}
-                    <button type="button" onClick={addUso} className="mt-2 bg-gray-700 text-white px-4 py-2 rounded">Agregar Uso</button>
+                    <button type="button" onClick={addUso} className="mt-2 bg-gray-700 text-white px-4 py-2 rounded">
+                      Agregar Uso
+                    </button>
                   </div>
                 </div>
               )}
@@ -211,7 +211,7 @@ function App() {
                 </div>
               )}
 
-              {activeTab === 'recibo' && (
+              {activeTab === 'predioTitular' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <InputField
                     label="Número de Liquidación"
@@ -243,7 +243,9 @@ function App() {
               )}
 
               <div className="text-center">
-                <button type="submit" className="w-full sm:w-auto bg-blue-500 text-white font-bold py-2 px-8 rounded-lg shadow-md hover:bg-blue-600">Generar Recibo</button>
+                <button type="submit" className="w-full sm:w-auto bg-blue-500 text-white font-bold py-2 px-8 rounded-lg shadow-md hover:bg-blue-600">
+                  Generar Recibo
+                </button>
               </div>
             </form>
           </div>
@@ -253,8 +255,12 @@ function App() {
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
           <div className="bg-white w-11/12 h-5/6 rounded-lg overflow-hidden relative">
             <iframe src={pdfUrl} className="w-full h-full"></iframe>
-            <button onClick={downloadDocx} className="absolute bottom-4 right-4 bg-blue-500 text-white px-4 py-2 rounded">Generar Recibo</button>
-            <button onClick={() => setPdfUrl(null)} className="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded">Cerrar</button>
+            <button onClick={downloadDocx} className="absolute bottom-4 right-4 bg-blue-500 text-white px-4 py-2 rounded">
+              Generar Recibo
+            </button>
+            <button onClick={() => setPdfUrl(null)} className="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded">
+              Cerrar
+            </button>
           </div>
         </div>
       )}
